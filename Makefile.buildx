@@ -1,0 +1,15 @@
+MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+CURRENT_PATH := $(realpath $(patsubst %/,%,$(dir $(MKFILE_PATH))))
+BUILDDIR ?= $(CURRENT_PATH)/build
+
+.PHONY: all binaries tarball
+all: binaries tarball
+
+binaries: | $(OUTPUT_DIR)
+	TARGET=binary-releaser OUTPUT=$(BUILDDIR) hack/build
+
+tarball: | $(OUTPUT_DIR)
+	TARGET=releaser OUTPUT=$(BUILDDIR) hack/build
+
+$(OUTPUT_DIR):
+	mkdir -p $@
