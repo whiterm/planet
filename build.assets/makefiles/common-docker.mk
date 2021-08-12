@@ -12,6 +12,7 @@ PLANET_BUILDFLAGS := -tags 'selinux sqlite_omit_load_extension'
 all: common-docker.mk $(ASSETDIR)/planet $(ASSETDIR)/docker-import
 	make -C $(ASSETS)/makefiles/base/systemd
 	make -C $(ASSETS)/makefiles/base/network -f network.mk
+	make -C $(ASSETS)/makefiles/base/haproxy -f haproxy.mk
 	make -C $(ASSETS)/makefiles/base/node-problem-detector -f node-problem-detector.mk
 	make -C $(ASSETS)/makefiles/base/dns -f dns.mk
 	make -C $(ASSETS)/makefiles/base/docker -f docker.mk

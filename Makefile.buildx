@@ -32,7 +32,7 @@ all: tarball
 binaries: | $(BUILDDIR) $(OUTPUTDIR)
 	TARGET=binary-releaser OUTPUTDIR=$(OUTPUTDIR) hack/build
 
-tarball: $(BUILDDIR)/pause.tar.gz $(BUILDDIR)/nettest.tar.gz | $(BUILDDIR) $(OUTPUTDIR)
+tarball: $(BUILDDIR)/pause.tar.gz $(BUILDDIR)/nettest.tar.gz $(BUILDDIR)/haproxy.tar.gz | $(BUILDDIR) $(OUTPUTDIR)
 	TARGET=releaser OUTPUTDIR=$(OUTPUTDIR) hack/build $(DOCKER_BUILD_ARGS)
 
 rootfs-shell: $(BUILDDIR)/pause.tar.gz $(BUILDDIR)/nettest.tar.gz | $(BUILDDIR)
@@ -47,6 +47,11 @@ $(BUILDDIR)/pause.tar.gz: | $(BUILDDIR)
 
 $(BUILDDIR)/nettest.tar.gz: image=gcr.io/google_containers/nettest:1.8
 $(BUILDDIR)/nettest.tar.gz: | $(BUILDDIR)
+	$(DOCKER) pull $(image)
+	$(DOCKER) save -o $@ $(image)
+
+$(BUILDDIR)/haproxy.tar.gz: image=docker.io/haproxy:2.4.1-alpine
+$(BUILDDIR)/haproxy.tar.gz: | $(BUILDDIR)
 	$(DOCKER) pull $(image)
 	$(DOCKER) save -o $@ $(image)
 

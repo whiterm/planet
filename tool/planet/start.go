@@ -166,6 +166,8 @@ func start(config *Config) (*runtimeContext, error) {
 		box.EnvPair{Name: EnvServiceUID, Val: config.ServiceUser.UID},
 		box.EnvPair{Name: EnvServiceGID, Val: config.ServiceUser.GID},
 		box.EnvPair{Name: EnvHighAvailability, Val: strconv.FormatBool(config.HighAvailability)},
+		box.EnvPair{Name: EnvLoadBalancerType, Val: config.LoadbalancerType},
+		box.EnvPair{Name: EnvLoadBalancerExtAddress, Val: config.LoadbalancerExtAddress},
 	)
 
 	// Setup http_proxy / no_proxy environment configuration
@@ -651,6 +653,7 @@ func setCoreDNS(config *Config) error {
 	}
 
 	corednsConfig, err := generateCoreDNSConfig(coreDNSConfig{
+		PublicIP:            config.PublicIP,
 		Zones:               config.DNS.Zones,
 		Hosts:               config.DNS.Hosts,
 		ListenAddrs:         config.DNS.ListenAddrs,
@@ -686,6 +689,7 @@ func generateCoreDNSConfig(config coreDNSConfig, tpl string) (string, error) {
 }
 
 type coreDNSConfig struct {
+	PublicIP            string
 	Zones               map[string][]string
 	Hosts               map[string][]string
 	ListenAddrs         []string
@@ -700,13 +704,14 @@ var coreDNSTemplate = `
   reload
   bind{{range $bind := .ListenAddrs}} {{$bind}}{{- end}}
   errors
-  hosts /etc/coredns/coredns.hosts {
+  hosts {
+    {{ .PublicIP }} leader.telekube.local leader.gravity.local registry.local
     {{- range $hostname, $ips := .Hosts}}{{range $ip := $ips}}
     {{$ip}} {{$hostname}}{{end}}{{end}}
     fallthrough
   }
   kubernetes cluster.local in-addr.arpa ip6.arpa {
-    endpoint https://leader.telekube.local:6443
+    endpoint https://127.0.0.1:9443
     tls /var/state/coredns.cert /var/state/coredns.key /var/state/root.cert
     pods verified
     fallthrough in-addr.arpa ip6.arpa

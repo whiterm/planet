@@ -151,7 +151,7 @@ github.com/gravitational/configure
 github.com/gravitational/configure/cstrings
 # github.com/gravitational/coordinate v0.0.0-20210729105737-9889f283ee4f
 github.com/gravitational/coordinate/config
-# github.com/gravitational/coordinate/v4 v4.0.0
+# github.com/gravitational/coordinate/v4 v4.0.0 => github.com/whiterm/coordinate/v4 v4.0.0-20210811041419-577aec7a6a20
 github.com/gravitational/coordinate/v4/config
 github.com/gravitational/coordinate/v4/leader
 # github.com/gravitational/etcd-backup v0.0.0-20210730122523-5067e2c92759
@@ -197,7 +197,7 @@ github.com/jmespath/go-jmespath
 # github.com/jmoiron/sqlx v1.2.0
 github.com/jmoiron/sqlx
 github.com/jmoiron/sqlx/reflectx
-# github.com/jonboulle/clockwork v0.2.2
+# github.com/jonboulle/clockwork v0.1.1-0.20190114141812-62fb9bc030d1
 github.com/jonboulle/clockwork
 # github.com/json-iterator/go v1.1.10 => github.com/json-iterator/go v1.1.5
 github.com/json-iterator/go
@@ -290,7 +290,7 @@ github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
 # github.com/seccomp/libseccomp-golang v0.9.0
 github.com/seccomp/libseccomp-golang
-# github.com/sirupsen/logrus v1.7.0 => github.com/gravitational/logrus v1.4.3
+# github.com/sirupsen/logrus v1.8.1 => github.com/gravitational/logrus v1.4.3
 github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/syslog
 # github.com/spf13/pflag v1.0.5

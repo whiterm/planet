@@ -142,6 +142,11 @@ type Config struct {
 	HighAvailability bool
 	// FlannelBackend specifies the backend to pair with flannel.
 	FlannelBackend string
+	// LoadbalancerType specifies the loadbalancer type.
+	// It can be "internal" or "external".
+	LoadbalancerType string
+	// LoadbalancerExtAddress specifies the address of the external loadbalancer.
+	LoadbalancerExtAddress string
 }
 
 // DNS describes DNS server configuration

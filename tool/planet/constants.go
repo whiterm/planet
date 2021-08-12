@@ -275,6 +275,12 @@ const (
 	// EnvFlannelBackend specifies the flannel backend.
 	EnvFlannelBackend = "FLANNEL_BACKEND"
 
+	// EnvLoadBalancerType specifies the loadbalancer type
+	EnvLoadBalancerType = "PLANET_LOADBALANCER_TYPE"
+
+	// EnvLoadBalancerExtAddress specifies the address of external loadbalancer
+	EnvLoadBalancerExtAddress = "PLANET_LOADBALANCER_EXT_ADDR"
+
 	// DefaultDNSListenAddr is the default IP address CoreDNS will listen on
 	DefaultDNSListenAddr = "127.0.0.2"
 
@@ -326,11 +332,6 @@ const (
 
 	// AssumeEtcdVersion is the etcd version we assume we're using if we're unable to locate the running version
 	AssumeEtcdVersion = "v2.3.8"
-
-	// LegacyAPIServerDNSName is the domain name of a current leader server
-	// as used to be in previous versions.
-	// This is kept for backwards-compatibility
-	LegacyAPIServerDNSName = "apiserver"
 
 	// DNSNdots defines the threshold for amount of dots that must appear in a name
 	// before an initial absolute query will be made

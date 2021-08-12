@@ -1,0 +1,24 @@
+[Unit]
+Description=HAProxy Load Balancer
+Documentation=file:/usr/share/doc/haproxy/configuration.txt.gz
+After=network.target
+
+[Service]
+EnvironmentFile=-/etc/default/haproxy
+EnvironmentFile=-/etc/sysconfig/haproxy
+Environment="CONFIG=/etc/haproxy/haproxy.cfg" "PIDFILE=/run/haproxy.pid" "EXTRAOPTS=-S /run/haproxy-master.sock"
+ExecStartPre=/bin/bash -c 'cat /var/state/kubelet.cert /var/state/kubelet.key > /etc/haproxy/certs/haproxy.pem'
+ExecStartPre=/usr/local/sbin/haproxy -f $CONFIG -c -q $EXTRAOPTS
+ExecStart=/usr/local/sbin/haproxy -Ws -f $CONFIG -p $PIDFILE $EXTRAOPTS
+ExecReload=/usr/local/sbin/haproxy -f $CONFIG -c -q $EXTRAOPTS
+ExecReload=/bin/kill -USR2 $MAINPID
+ExecReload=/bin/bash -c 'cat /var/state/kubelet.cert /var/state/kubelet.key > /etc/haproxy/certs/haproxy.pem'
+KillMode=mixed
+Restart=always
+StartLimitInterval=0
+RestartSec=10
+SuccessExitStatus=143
+Type=notify
+
+[Install]
+WantedBy=multi-user.target
