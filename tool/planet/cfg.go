@@ -17,13 +17,11 @@ limitations under the License.
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"text/template"
 
 	"github.com/gravitational/planet/lib/box"
 	"github.com/gravitational/planet/lib/constants"
@@ -142,6 +140,11 @@ type Config struct {
 	HighAvailability bool
 	// FlannelBackend specifies the backend to pair with flannel.
 	FlannelBackend string
+	// LoadbalancerType specifies the loadbalancer type.
+	// It can be "internal" or "external".
+	LoadbalancerType string
+	// LoadbalancerExtAddress specifies the address of the external loadbalancer.
+	LoadbalancerExtAddress string
 }
 
 // DNS describes DNS server configuration
@@ -205,10 +208,13 @@ type serviceUser struct {
 	GID string
 }
 
-// APIServerIP returns the IP of the "kubernetes" service which is the first IP
-// of the configured service subnet
-func (cfg *Config) APIServerIP() net.IP {
-	return cfg.ServiceCIDR.FirstIP()
+// APIServerURL returns the address of the kubernetes cluster (https://hostname:port)
+func (cfg *Config) APIServerURL() string {
+	kubeAPIAddress := "127.0.0.1"
+	if cfg.LoadbalancerType == "external" {
+		kubeAPIAddress = cfg.LoadbalancerExtAddress
+	}
+	return fmt.Sprintf("https://%s:%s", kubeAPIAddress, constants.APIServerPort)
 }
 
 // HostStateDir returns the gravity state directory on host.
@@ -314,36 +320,3 @@ func (r *boolFlag) Set(input string) error {
 func (r boolFlag) String() string {
 	return strconv.FormatBool(bool(r))
 }
-
-// NewKubeConfig returns a kubectl config for the specified kubernetes API server IP
-func NewKubeConfig(ip net.IP, stateDir string) ([]byte, error) {
-	var b bytes.Buffer
-	err := kubeConfig.Execute(&b, map[string]string{
-		"ip": ip.String(), "stateDir": stateDir,
-	})
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	return b.Bytes(), nil
-}
-
-// kubeConfig is a template of a configuration file for kubectl
-var kubeConfig = template.Must(template.New("kubeConfig").Parse(`apiVersion: v1
-kind: Config
-current-context: default
-clusters:
-- name: default
-  cluster:
-    certificate-authority: {{.stateDir}}/secrets/root.cert
-    server: https://{{.ip}}
-users:
-- name: default
-  user:
-    client-certificate: {{.stateDir}}/secrets/kubectl.cert
-    client-key: {{.stateDir}}/secrets/kubectl.key
-contexts:
-- name: default
-  context:
-    cluster: default
-    user: default
-    namespace: default`))

@@ -37,7 +37,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.5 // indirect
 	github.com/imdario/mergo v0.3.6
-	github.com/jonboulle/clockwork v0.2.2 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
 	github.com/magefile/mage v1.10.0
@@ -53,7 +52,7 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/prometheus/client_golang v1.7.1
 	github.com/seccomp/libseccomp-golang v0.9.0 // indirect
-	github.com/sirupsen/logrus v1.7.0
+	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/gocapability v0.0.0-20180223013746-33e07d32887e
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
@@ -81,6 +80,7 @@ replace (
 	github.com/coreos/pkg => github.com/coreos/pkg v0.0.0-20180108230652-97fdf19511ea
 	github.com/docker/docker => github.com/docker/engine v17.12.0-ce-rc1.0.20200204220554-5f6d6f3f2203+incompatible
 	github.com/google/uuid => github.com/google/uuid v1.0.0
+	github.com/gravitational/coordinate/v4 => github.com/whiterm/coordinate/v4 v4.0.0-20210902155529-b0a819012bc5
 	github.com/json-iterator/go => github.com/json-iterator/go v1.1.5
 	github.com/sirupsen/logrus => github.com/gravitational/logrus v1.4.3
 	go.etcd.io/etcd => go.etcd.io/etcd v0.5.0-alpha.5.0.20200401174654-e694b7bb0875

@@ -23,7 +23,6 @@ import (
 	"math"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"reflect"
@@ -36,8 +35,8 @@ import (
 	"github.com/gravitational/planet/lib/constants"
 	"github.com/gravitational/planet/lib/monitoring"
 	"github.com/gravitational/planet/lib/utils"
+	"github.com/gravitational/planet/lib/utils/systemd"
 
-	"github.com/coreos/go-systemd/v22/dbus"
 	"github.com/davecgh/go-spew/spew"
 	etcdconf "github.com/gravitational/coordinate/v4/config"
 	backup "github.com/gravitational/etcd-backup/lib/etcd"
@@ -185,7 +184,7 @@ func etcdDisable(upgradeService, stopAPIServer bool) error {
 	// the API server as well (passed as flag from gravity to prevent accidental usage).
 	// TODO: This fix needs to be revisited to include a permanent solution.
 	if stopAPIServer {
-		err := systemctl(ctx, "stop", APIServerServiceName)
+		err := systemd.Systemctl(ctx, "stop", APIServerServiceName)
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -214,7 +213,7 @@ func etcdEnable(upgradeService bool, joinToMaster string) error {
 		// restart the clients of the etcd service when the etcd service is brought online, which usually will be post
 		// upgrade. This will ensure clients running inside planet are restarted, which will refresh any local state
 		restartEtcdClients(ctx)
-		return trace.Wrap(enableService(ctx, ETCDServiceName))
+		return trace.Wrap(systemd.EnableService(ctx, ETCDServiceName))
 	}
 	// don't actually enable the service if this is a proxy
 	env, err := box.ReadEnvironment(ContainerEnvironmentFile)
@@ -227,7 +226,7 @@ func etcdEnable(upgradeService bool, joinToMaster string) error {
 		return nil
 	}
 
-	return trace.Wrap(enableService(ctx, ETCDUpgradeServiceName))
+	return trace.Wrap(systemd.EnableService(ctx, ETCDUpgradeServiceName))
 }
 
 // etcdInitJoin ensures this particular node is part of an etcd cluster.
@@ -346,7 +345,7 @@ func etcdUpgrade(rollback bool) error {
 	log.Info("Checking etcd service status")
 	services := []string{ETCDServiceName, ETCDUpgradeServiceName}
 	for _, service := range services {
-		status, err := getServiceStatus(service)
+		status, err := systemd.GetServiceStatus(service)
 		if err != nil {
 			log.Warnf("Failed to query status of service %v. Continuing upgrade. Error: %v", service, err)
 			continue
@@ -427,7 +426,7 @@ func restartEtcdClients(ctx context.Context) {
 	for _, service := range services {
 		// reset the kubernetes api server to take advantage of any new etcd settings that may have changed
 		// this only happens if the service is already running
-		status, err := getServiceStatus(service)
+		status, err := systemd.GetServiceStatus(service)
 		if err != nil {
 			log.WithFields(log.Fields{
 				log.ErrorKey: err,
@@ -436,7 +435,7 @@ func restartEtcdClients(ctx context.Context) {
 			return
 		}
 		if status != "inactive" {
-			tryResetService(ctx, service)
+			systemd.TryResetService(ctx, service)
 		}
 	}
 }
@@ -504,7 +503,7 @@ func (e *etcdGateway) resyncEtcdMasters(ctx context.Context, client *etcdv3.Clie
 		return trace.Wrap(err, "failed to update etcd environment file").AddField("file", DefaultEtcdSyncedEnvFile)
 	}
 
-	err = systemctl(ctx, "restart", ETCDServiceName)
+	err = systemd.Systemctl(ctx, "restart", ETCDServiceName)
 	if err != nil {
 		return trace.Wrap(err, "failed to restart etcd service").AddField("service", ETCDServiceName)
 	}
@@ -747,28 +746,24 @@ func convertError(err error) error {
 	return err
 }
 
-// systemctl runs a local systemctl command in non-blocking mode.
-// TODO(knisbet): I'm using systemctl here, because using go-systemd and dbus appears to be unreliable, with
-// masking unit files not working. Ideally, this will use dbus at some point in the future.
-func systemctl(ctx context.Context, operation, service string) error {
-	return systemctlCmd(ctx, operation, service, "--no-block")
+func disableService(ctx context.Context, service string) error {
+	err := systemd.Systemctl(ctx, "mask", service)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	err = systemd.Systemctl(ctx, "stop", service)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	return trace.Wrap(waitForEtcdStopped(ctx))
 }
 
-func systemctlCmd(ctx context.Context, operation, service string, args ...string) error {
-	args = append([]string{operation, service}, args...)
-	out, err := exec.CommandContext(ctx, "/bin/systemctl", args...).CombinedOutput()
-	log.WithFields(log.Fields{
-		"operation": operation,
-		"output":    string(out),
-		"service":   service,
-	}).Info("Execute systemctl.")
-	if err != nil {
-		return trace.Wrap(err, "failed to execute systemctl: %s", out).AddFields(map[string]interface{}{
-			"operation": operation,
-			"service":   service,
-		})
+// isOwnedBySystemd checks whether the process is owned by systemd
+func isOwnedBySystemd(proc ps.Process) bool {
+	if proc.PPid() == 1 {
+		return true
 	}
-	return nil
+	return false
 }
 
 // waitForEtcdStopped waits for etcd to not be present in the process list
@@ -796,61 +791,6 @@ loop:
 		}
 		return nil
 	}
-}
-
-// isOwnedBySystemd checks whether the process is owned by systemd
-func isOwnedBySystemd(proc ps.Process) bool {
-	if proc.PPid() == 1 {
-		return true
-	}
-	return false
-}
-
-// tryResetService will request for systemd to restart a system service
-func tryResetService(ctx context.Context, service string) {
-	// ignoring error results is intentional
-	err := systemctl(ctx, "restart", service)
-	if err != nil {
-		log.Warn("error attempting to restart service", err)
-	}
-}
-
-func disableService(ctx context.Context, service string) error {
-	err := systemctl(ctx, "mask", service)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-	err = systemctl(ctx, "stop", service)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-	return trace.Wrap(waitForEtcdStopped(ctx))
-}
-
-func enableService(ctx context.Context, service string) error {
-	err := systemctl(ctx, "unmask", service)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-	return trace.Wrap(systemctl(ctx, "start", service))
-}
-
-func getServiceStatus(service string) (string, error) {
-	conn, err := dbus.New()
-	if err != nil {
-		return "", trace.Wrap(err)
-	}
-	defer conn.Close()
-
-	status, err := conn.ListUnitsByNames([]string{service})
-	if err != nil {
-		return "", trace.Wrap(err)
-	}
-	if len(status) != 1 {
-		return "", trace.BadParameter("unexpected number of status results when checking service '%q'", service)
-	}
-
-	return status[0].ActiveState, nil
 }
 
 func readEtcdVersion(path string) (currentVersion string, prevVersion string, err error) {

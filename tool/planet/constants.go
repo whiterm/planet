@@ -64,11 +64,14 @@ const (
 	// EnvPublicIP names the environment variable that specifies
 	// the public IP address of the node
 	EnvPublicIP = "PLANET_PUBLIC_IP"
+	// EnvRegistryAddress names the environment variable that specifies
+	// the address of the docker registry
+	EnvRegistryAddress = "REGISTRY_ADDRESS"
 	// EnvAPIServerName names the environment variable that specifies
-	// the address of the API server
+	// the address for connecting to the api server
 	EnvAPIServerName = "KUBE_APISERVER"
 	// EnvAPIServerPort names the environment variable that specifies
-	// the default secure port of the API server
+	// the default secure port for connecting to the api server
 	EnvAPIServerPort = "KUBE_APISERVER_PORT"
 	// EnvEtcdProxy names the environment variable that specifies
 	// the value of the proxy mode setting
@@ -274,6 +277,12 @@ const (
 
 	// EnvFlannelBackend specifies the flannel backend.
 	EnvFlannelBackend = "FLANNEL_BACKEND"
+
+	// EnvLoadBalancerType specifies the loadbalancer type
+	EnvLoadBalancerType = "PLANET_LOADBALANCER_TYPE"
+
+	// EnvLoadBalancerExtAddress specifies the address of external loadbalancer
+	EnvLoadBalancerExtAddress = "PLANET_LOADBALANCER_EXT_ADDR"
 
 	// DefaultDNSListenAddr is the default IP address CoreDNS will listen on
 	DefaultDNSListenAddr = "127.0.0.2"

@@ -515,6 +515,22 @@
                 "cli": {
                     "name": "flannel-backend"
                 }
+            },
+            {
+                "type": "String",
+                "name": "loadbalancer_type",
+                "env": "PLANET_LOADBALANCER_TYPE",
+                "cli": {
+                    "name": "loadbalancer-type"
+                }
+            },
+            {
+                "type": "String",
+                "name": "loadbalancer_ext_addr",
+                "env": "PLANET_LOADBALANCER_EXT_ADDR",
+                "cli": {
+                    "name": "loadbalancer-ext-addr"
+                }
             }
         ]
     }

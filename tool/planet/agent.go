@@ -32,6 +32,8 @@ import (
 	"github.com/gravitational/planet/lib/constants"
 	"github.com/gravitational/planet/lib/monitoring"
 	"github.com/gravitational/planet/lib/utils"
+	"github.com/gravitational/planet/lib/utils/systemd"
+	"github.com/gravitational/planet/tool/loadbalancer"
 
 	etcdconf "github.com/gravitational/coordinate/v4/config"
 	"github.com/gravitational/coordinate/v4/leader"
@@ -58,6 +60,8 @@ type LeaderConfig struct {
 	PublicIP string
 	// LeaderKey is the EtcdKey of the leader
 	LeaderKey string
+	// MasterLeaseKey is the EtcdKey of the masters
+	MasterLeaseKey string
 	// ElectionKey is the name of the key that controls if this node
 	// is participating in leader election. The value is a boolean with
 	// `true` meaning active participation.
@@ -79,12 +83,29 @@ type LeaderConfig struct {
 	APIServerDNS string
 	// HighAvailability enables kubernetes high availability mode.
 	HighAvailability bool
+	// LoadbalancerType specifies the loadbalancer type.
+	// It can be "internal" or "external".
+	LoadbalancerType string
+	// LoadbalancerExtAddress specifies the address of the external loadbalancer.
+	LoadbalancerExtAddress string
 }
 
 // String returns string representation of the agent leader configuration
 func (conf LeaderConfig) String() string {
 	return fmt.Sprintf("LeaderConfig(key=%v, ip=%v, role=%v, term=%v, endpoints=%v, apiserverDNS=%v)",
 		conf.LeaderKey, conf.PublicIP, conf.Role, conf.Term, conf.ETCD.Endpoints, conf.APIServerDNS)
+}
+
+func updateLoadbalancer(s *loadbalancer.Storage) leader.ActionCallbackFn {
+	return func(a leader.Action) {
+		switch a.Type {
+		case leader.ActionTypeCreate, leader.ActionTypeUpdate:
+			host := a.Value
+			s.Put(a.Key, host)
+		case leader.ActionTypeDelete:
+			s.Remove(a.Key)
+		}
+	}
 }
 
 // startLeaderClient starts the master election loop and sets up callbacks
@@ -121,6 +142,16 @@ func startLeaderClient(config agentConfig, agent agent.Agent, errorC chan error)
 		}
 	}()
 
+	lbManager := loadbalancer.NewManager()
+	if config.leader.LoadbalancerType == "external" {
+		if err := lbManager.StopService(); err != nil {
+			log.Warn(err)
+		}
+	} else {
+		go lbManager.Run()
+		client.AddRecursiveWatchCallback(context.Background(), conf.MasterLeaseKey, updateLoadbalancer(lbManager.GetStorage()))
+	}
+
 	// Watch for changes to the leader key.
 	// Update coredns.hosts with new leader address.
 	client.AddWatchCallback(conf.LeaderKey, updateDNS())
@@ -128,6 +159,9 @@ func startLeaderClient(config agentConfig, agent agent.Agent, errorC chan error)
 	if conf.Role != RoleMaster {
 		return client, nil
 	}
+
+	masterKey := fmt.Sprintf("%s/%s", conf.MasterLeaseKey, config.leader.PublicIP)
+	go client.LeaseLoop(context.Background(), masterKey, config.leader.PublicIP, 4*time.Hour)
 
 	// Watch for changes in the election key.
 	// Start/Stop voter participation when election is enabled/disabled.
@@ -238,9 +272,9 @@ func recordElectionEvents(publicIP string, agent agent.Agent) leader.CallbackFn 
 func writeLocalLeader(target string, masterIP string) error {
 	contents := fmt.Sprintf("%s %s %s %s %s\n",
 		masterIP,
-		constants.APIServerDNSName,
-		constants.APIServerDNSNameGravity,
 		constants.RegistryDNSName,
+		constants.APIServerDNSNameGravity,
+		"registry.local",
 		LegacyAPIServerDNSName)
 	err := ioutil.WriteFile(
 		target,
@@ -270,7 +304,7 @@ func startUnits(ctx context.Context) error {
 	var errors []error
 	for _, unit := range controlPlaneUnits {
 		logger := log.WithField("unit", unit)
-		err := systemctlCmd(ctx, "start", unit)
+		err := systemd.SystemctlCmd(ctx, "start", unit)
 		if err != nil {
 			errors = append(errors, err)
 			// Instead of failing immediately, complete start of other units
@@ -285,7 +319,7 @@ func stopUnits(ctx context.Context) error {
 	var errors []error
 	for _, unit := range controlPlaneUnits {
 		logger := log.WithField("unit", unit)
-		err := systemctlCmd(ctx, "stop", unit)
+		err := systemd.SystemctlCmd(ctx, "stop", unit)
 		if err != nil {
 			errors = append(errors, err)
 			// Instead of failing immediately, complete stop of other units
@@ -294,9 +328,9 @@ func stopUnits(ctx context.Context) error {
 		// Even if 'systemctl stop' did not fail, the service could have failed stopping
 		// even though 'stop' is blocking, it does not return an error upon service failing.
 		// See github.com/gravitational/gravity/issues/1209 for more details
-		if err := systemctlCmd(ctx, "is-failed", unit); err == nil {
+		if err := systemd.SystemctlCmd(ctx, "is-failed", unit); err == nil {
 			logger.Info("Reset failed unit.")
-			if err := systemctlCmd(ctx, "reset-failed", unit); err != nil {
+			if err := systemd.SystemctlCmd(ctx, "reset-failed", unit); err != nil {
 				logger.WithError(err).Warn("Failed to reset failed unit.")
 			}
 		}
