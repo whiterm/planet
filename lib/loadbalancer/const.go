@@ -16,5 +16,15 @@ limitations under the License.
 
 package loadbalancer
 
-// ConfigPath defines the path to the config file in the planet
-const ConfigPath = "/etc/haproxy/haproxy.cfg"
+const (
+	// configPath defines the path to the config file in the planet
+	configPath = "/etc/haproxy/haproxy.cfg"
+
+	// haproxyServiceName defines the name of haproxy service
+	haproxyServiceName = "haproxy.service"
+
+	// ExternalType specifies the type of external loadbalancer.
+	ExternalType = "external"
+	// InternalType specifies the type of internal loadbalancer
+	InternalType = "internal"
+)

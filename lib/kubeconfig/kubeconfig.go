@@ -9,15 +9,15 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
-// Kubeconfig defines kubernetes Kubeconfig file
-type Kubeconfig struct {
+// Config defines kubernetes Kubeconfig file
+type Config struct {
 	filepath  string
 	apiConfig *api.Config
 }
 
 // Bytes serializes the config to yaml
-func (k *Kubeconfig) Bytes() ([]byte, error) {
-	content, err := clientcmd.Write(*k.apiConfig)
+func (c *Config) Bytes() ([]byte, error) {
+	content, err := clientcmd.Write(*c.apiConfig)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -25,13 +25,13 @@ func (k *Kubeconfig) Bytes() ([]byte, error) {
 }
 
 // BuildFile creates box.File with kubeconfig
-func (k *Kubeconfig) BuildFile(owners *box.FileOwner) (*box.File, error) {
-	content, err := k.Bytes()
+func (c *Config) BuildFile(owners *box.FileOwner) (*box.File, error) {
+	content, err := c.Bytes()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 	return &box.File{
-		Path:     k.filepath,
+		Path:     c.filepath,
 		Contents: bytes.NewReader(content),
 		Mode:     0644,
 		Owners:   owners,
@@ -54,8 +54,8 @@ type Options struct {
 	ClientCertificate string
 }
 
-// GenerateSimpleKubeConfig creates Kubeconfig
-func GenerateSimpleKubeConfig(o Options) *Kubeconfig {
+// GenerateSimpleConfig creates Config
+func GenerateSimpleConfig(o Options) *Config {
 	clusterName := "kubernetes"
 	contextName := "default"
 	clusters := make(map[string]*api.Cluster)
@@ -82,7 +82,7 @@ func GenerateSimpleKubeConfig(o Options) *Kubeconfig {
 		CurrentContext: contextName,
 		AuthInfos:      authinfos,
 	}
-	return &Kubeconfig{
+	return &Config{
 		filepath:  o.Filepath,
 		apiConfig: &apiConfig,
 	}

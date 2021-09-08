@@ -1,6 +1,6 @@
 [Unit]
 Description=HAProxy Load Balancer
-Documentation=file:/usr/share/doc/haproxy/configuration.txt.gz
+Documentation=file:///usr/share/doc/haproxy/configuration.txt.gz
 After=network.target
 
 [Service]
@@ -14,6 +14,8 @@ ExecReload=/usr/local/sbin/haproxy -f $CONFIG -c -q $EXTRAOPTS
 ExecReload=/bin/kill -USR2 $MAINPID
 ExecReload=/bin/bash -c 'cat /var/state/kubelet.cert /var/state/kubelet.key > /etc/haproxy/certs/haproxy.pem'
 KillMode=mixed
+
+#it will always try to restart
 Restart=always
 StartLimitInterval=0
 RestartSec=10

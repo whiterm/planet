@@ -68,7 +68,7 @@ const (
 	// the address of the docker registry
 	EnvRegistryAddress = "REGISTRY_ADDRESS"
 	// EnvAPIServerName names the environment variable that specifies
-	// the address for connecting to the api server
+	// the address for connecting to the API server
 	EnvAPIServerName = "KUBE_APISERVER"
 	// EnvAPIServerPort names the environment variable that specifies
 	// the default secure port for connecting to the api server
@@ -374,9 +374,6 @@ const (
 
 	// SharedFileMask is file mask for shared file
 	SharedFileMask = 0644
-
-	// SharedDirMask is a permissions mask for a shared directory
-	SharedDirMask = 0755
 
 	// SharedReadWriteMask is a mask for a shared file with read/write access for everyone
 	SharedReadWriteMask = 0666

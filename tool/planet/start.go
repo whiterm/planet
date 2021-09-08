@@ -137,11 +137,6 @@ func start(config *Config) (*runtimeContext, error) {
 		return nil, trace.Errorf("--role parameter must be set")
 	}
 
-	kubeAPIAddress := "127.0.0.1"
-	if config.LoadbalancerType == "external" {
-		kubeAPIAddress = config.LoadbalancerExtAddress
-	}
-
 	config.Env = append(config.Env,
 		box.EnvPair{Name: EnvMasterIP, Val: config.MasterIP},
 		box.EnvPair{Name: EnvCloudProvider, Val: config.CloudProvider},
@@ -156,7 +151,7 @@ func start(config *Config) (*runtimeContext, error) {
 		box.EnvPair{Name: EnvAgentName, Val: config.EtcdMemberName},
 		box.EnvPair{Name: EnvInitialCluster, Val: toKeyValueList(config.InitialCluster)},
 		box.EnvPair{Name: EnvRegistryAddress, Val: constants.RegistryDNSName},
-		box.EnvPair{Name: EnvAPIServerName, Val: kubeAPIAddress},
+		box.EnvPair{Name: EnvAPIServerName, Val: config.APIServerAddr()},
 		box.EnvPair{Name: EnvAPIServerPort, Val: constants.APIServerPort},
 		box.EnvPair{Name: EnvEtcdProxy, Val: config.EtcdProxy},
 		box.EnvPair{Name: EnvEtcdMemberName, Val: config.EtcdMemberName},
@@ -247,7 +242,7 @@ func start(config *Config) (*runtimeContext, error) {
 	if err = addKubeConfigFiles(config); err != nil {
 		return nil, trace.Wrap(err)
 	}
-	if err = addKubektlKubeConfig(config); err != nil {
+	if err = addKubectlKubeConfig(config); err != nil {
 		return nil, trace.Wrap(err)
 	}
 
@@ -569,9 +564,9 @@ func genKubeconfigOtions(component string, apiServerURL string) kubeconfig.Optio
 }
 
 func genKubeconfigFiles(opts []kubeconfig.Options, owners *box.FileOwner) ([]box.File, error) {
-	files := make([]box.File, 0)
+	files := make([]box.File, 0, len(opts))
 	for _, opt := range opts {
-		file, err := kubeconfig.GenerateSimpleKubeConfig(opt).BuildFile(owners)
+		file, err := kubeconfig.GenerateSimpleConfig(opt).BuildFile(owners)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
@@ -656,8 +651,8 @@ func applyConfigOverrides(config *kubeletconfig.KubeletConfiguration) error {
 	return nil
 }
 
-// addKubektlKubeConfig writes a kubectl config file
-func addKubektlKubeConfig(config *Config) error {
+// addKubectlKubeConfig writes a kubectl config file
+func addKubectlKubeConfig(config *Config) error {
 	// Generate two kubectl configuration files: one will be used by
 	// kubectl when invoked from host, another one - from planet,
 	// because state directory may be different.
@@ -667,7 +662,7 @@ func addKubektlKubeConfig(config *Config) error {
 	}
 	server := config.APIServerURL()
 	for configPath, stateDir := range kubeConfigs {
-		content, err := kubeconfig.GenerateSimpleKubeConfig(kubeconfig.Options{
+		content, err := kubeconfig.GenerateSimpleConfig(kubeconfig.Options{
 			Username:             "kubectl",
 			Server:               server,
 			CertificateAuthority: fmt.Sprintf("%s/secrets/root.cert", stateDir),

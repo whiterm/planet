@@ -384,7 +384,7 @@ COPY --from=cni-downloader /opt/cni/bin/ /opt/cni/bin/
 RUN set -ex && mkdir -p /usr/local/etc/haproxy /usr/local/sbin/ /etc/haproxy/certs
 COPY --from=haproxy-builder /usr/local/sbin/haproxy /usr/local/sbin/haproxy
 COPY --from=haproxy-builder /usr/local/etc/haproxy /usr/local/etc/haproxy
-COPY ./build.assets/makefiles/haproxy/haproxy.service /lib/systemd/system/
+COPY ./build.assets/makefiles/base/haproxy/haproxy.service /lib/systemd/system/
 
 # scripts to wait for etcd/flannel to come up
 RUN --mount=target=/host \

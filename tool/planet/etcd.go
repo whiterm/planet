@@ -435,7 +435,7 @@ func restartEtcdClients(ctx context.Context) {
 			return
 		}
 		if status != "inactive" {
-			systemd.TryResetService(ctx, service)
+			systemd.TryRestartService(ctx, service)
 		}
 	}
 }
@@ -747,11 +747,7 @@ func convertError(err error) error {
 }
 
 func disableService(ctx context.Context, service string) error {
-	err := systemd.Systemctl(ctx, "mask", service)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-	err = systemd.Systemctl(ctx, "stop", service)
+	err := systemd.DisableService(ctx, service)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -760,10 +756,7 @@ func disableService(ctx context.Context, service string) error {
 
 // isOwnedBySystemd checks whether the process is owned by systemd
 func isOwnedBySystemd(proc ps.Process) bool {
-	if proc.PPid() == 1 {
-		return true
-	}
-	return false
+	return proc.PPid() == 1
 }
 
 // waitForEtcdStopped waits for etcd to not be present in the process list

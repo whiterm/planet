@@ -25,6 +25,7 @@ import (
 
 	"github.com/gravitational/planet/lib/box"
 	"github.com/gravitational/planet/lib/constants"
+	"github.com/gravitational/planet/lib/loadbalancer"
 	"github.com/gravitational/planet/lib/user"
 	"github.com/gravitational/trace"
 
@@ -208,13 +209,17 @@ type serviceUser struct {
 	GID string
 }
 
-// APIServerURL returns the address of the kubernetes cluster (https://hostname:port)
-func (cfg *Config) APIServerURL() string {
-	kubeAPIAddress := "127.0.0.1"
-	if cfg.LoadbalancerType == "external" {
-		kubeAPIAddress = cfg.LoadbalancerExtAddress
+// APIServerAddr returns the address of the kubernetes cluster. it can be IP or domain address
+func (cfg *Config) APIServerAddr() string {
+	if cfg.LoadbalancerType == loadbalancer.ExternalType {
+		return cfg.LoadbalancerExtAddress
 	}
-	return fmt.Sprintf("https://%s:%s", kubeAPIAddress, constants.APIServerPort)
+	return "127.0.0.1"
+}
+
+// APIServerURL returns the URL of the kubernetes apiserver (https://hostname:port)
+func (cfg *Config) APIServerURL() string {
+	return fmt.Sprintf("https://%s:%s", cfg.APIServerAddr(), constants.APIServerPort)
 }
 
 // HostStateDir returns the gravity state directory on host.

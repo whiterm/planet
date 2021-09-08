@@ -30,10 +30,10 @@ import (
 	"time"
 
 	"github.com/gravitational/planet/lib/constants"
+	"github.com/gravitational/planet/lib/loadbalancer"
 	"github.com/gravitational/planet/lib/monitoring"
 	"github.com/gravitational/planet/lib/utils"
 	"github.com/gravitational/planet/lib/utils/systemd"
-	"github.com/gravitational/planet/tool/loadbalancer"
 
 	etcdconf "github.com/gravitational/coordinate/v4/config"
 	"github.com/gravitational/coordinate/v4/leader"
@@ -96,14 +96,14 @@ func (conf LeaderConfig) String() string {
 		conf.LeaderKey, conf.PublicIP, conf.Role, conf.Term, conf.ETCD.Endpoints, conf.APIServerDNS)
 }
 
-func updateLoadbalancer(s *loadbalancer.Storage) leader.ActionCallbackFn {
+func updateLoadbalancer(ctx context.Context, s loadbalancer.Storage) leader.ActionCallbackFn {
 	return func(a leader.Action) {
 		switch a.Type {
 		case leader.ActionTypeCreate, leader.ActionTypeUpdate:
 			host := a.Value
-			s.Put(a.Key, host)
+			s.Put(ctx, a.Key, host)
 		case leader.ActionTypeDelete:
-			s.Remove(a.Key)
+			s.Remove(ctx, a.Key)
 		}
 	}
 }
@@ -115,7 +115,7 @@ func updateLoadbalancer(s *loadbalancer.Storage) leader.ActionCallbackFn {
 // Otherwise, the services are stopped to avoid interfering with the active master instance.
 // Also, every time a new master is elected, the node modifies its /etc/hosts file
 // to reflect the change of the kubernetes API server.
-func startLeaderClient(config agentConfig, agent agent.Agent, errorC chan error) (leaderClient io.Closer, err error) {
+func startLeaderClient(ctx context.Context, config agentConfig, agent agent.Agent, errorC chan error) (leaderClient io.Closer, err error) {
 	conf := config.leader
 	log.Infof("%v start", conf)
 
@@ -143,13 +143,13 @@ func startLeaderClient(config agentConfig, agent agent.Agent, errorC chan error)
 	}()
 
 	lbManager := loadbalancer.NewManager()
-	if config.leader.LoadbalancerType == "external" {
-		if err := lbManager.StopService(); err != nil {
-			log.Warn(err)
+	if config.leader.LoadbalancerType == loadbalancer.ExternalType {
+		if err := lbManager.StopService(ctx); err != nil {
+			log.Warn("error attempting to stop loadbalancer service err: ", err)
 		}
 	} else {
-		go lbManager.Run()
-		client.AddRecursiveWatchCallback(context.Background(), conf.MasterLeaseKey, updateLoadbalancer(lbManager.GetStorage()))
+		go lbManager.Start(ctx)
+		client.AddRecursiveWatchCallback(ctx, conf.MasterLeaseKey, updateLoadbalancer(ctx, lbManager.GetStorage()))
 	}
 
 	// Watch for changes to the leader key.
@@ -415,7 +415,7 @@ func runAgent(config agentConfig) error {
 	}
 
 	errorC := make(chan error, 10)
-	client, err := startLeaderClient(config, monitoringAgent, errorC)
+	client, err := startLeaderClient(ctx, config, monitoringAgent, errorC)
 	if err != nil {
 		return trace.Wrap(err)
 	}

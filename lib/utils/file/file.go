@@ -17,37 +17,34 @@ limitations under the License.
 package file
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
+
+	"github.com/gravitational/planet/lib/constants"
 
 	"github.com/gravitational/trace"
 )
 
+// File describes the file that will be saved to disk.
 type File struct {
 	Path string
 	Data []byte
 	Mode os.FileMode
 }
 
-func EnsureFiles(files []*File) error {
-	for _, file := range files {
-		if _, err := EnsureFile(file); err != nil {
-			return trace.Wrap(err)
-		}
-	}
-	return nil
-}
-
+// EnsureFile checks for the existence of a file, if it does not exist or
+// its content does not match the desired then saves the file.
+// It returns true if the file was overwritten
 func EnsureFile(f *File) (bool, error) {
-	if err := os.MkdirAll(filepath.Dir(f.Path), 0755); err != nil {
-		return false, err
+	if err := os.MkdirAll(filepath.Dir(f.Path), constants.SharedDirMask); err != nil {
+		return false, trace.ConvertSystemError(err)
 	}
 	fs, err := os.Stat(f.Path)
 	if os.IsNotExist(err) {
-		if err = ioutil.WriteFile(f.Path, f.Data, f.Mode); err != nil {
-			return false, err
+		if err := ioutil.WriteFile(f.Path, f.Data, f.Mode); err != nil {
+			return false, trace.ConvertSystemError(err)
 		}
 		return true, nil
 	}
@@ -55,18 +52,18 @@ func EnsureFile(f *File) (bool, error) {
 		return false, err
 	}
 	if fs.Size() != int64(len(f.Data)) {
-		if err = ioutil.WriteFile(f.Path, f.Data, f.Mode); err != nil {
-			return false, err
+		if err := ioutil.WriteFile(f.Path, f.Data, f.Mode); err != nil {
+			return false, trace.ConvertSystemError(err)
 		}
 		return true, nil
 	}
 	oldData, err := ioutil.ReadFile(f.Path)
 	if err != nil {
-		return false, err
+		return false, trace.ConvertSystemError(err)
 	}
-	if !reflect.DeepEqual(oldData, f.Data) {
-		if err = ioutil.WriteFile(f.Path, f.Data, f.Mode); err != nil {
-			return false, err
+	if !bytes.Equal(oldData, f.Data) {
+		if err := ioutil.WriteFile(f.Path, f.Data, f.Mode); err != nil {
+			return false, trace.ConvertSystemError(err)
 		}
 		return true, nil
 	}
