@@ -92,7 +92,7 @@ func (m *Manager) ensureService(ctx context.Context, needRestart bool) error {
 	log.WithFields(log.Fields{
 		"service": haproxyServiceName,
 		"status":  status,
-	}).Info("service info")
+	}).Debug("service info")
 	if status == "active" && needRestart {
 		err := systemd.Systemctl(ctx, "restart", haproxyServiceName)
 		if err != nil {
