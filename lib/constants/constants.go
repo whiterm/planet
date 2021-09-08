@@ -74,14 +74,12 @@ const (
 	// OverlayInterfaceName is the name of the linux network interface connected to the overlay network
 	OverlayInterfaceName = "docker0"
 
-	// APIServerDNSName is the domain name of the current leader server.
-	APIServerDNSName = "leader.telekube.local"
+	// RegistryDNSName is the domain name of the current registry leader node.
+	RegistryDNSName = "leader.telekube.local"
 	// APIServerDNSNameGravity is the domain name of the current leader server.
 	APIServerDNSNameGravity = "leader.gravity.local"
-	// APIServerPort is the default secure port for the api server
-	APIServerPort = "6443"
-	// RegistryDNSName is the domain name of the cluster local registry.
-	RegistryDNSName = "registry.local"
+	// APIServerPort is the default secure port for connecting to the api server.
+	APIServerPort = "9443"
 
 	// CloudConfigFile specifies the file path for cloud-config for the kubernetes cloud controller
 	CloudConfigFile = "/etc/kubernetes/cloud-config.conf"

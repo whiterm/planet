@@ -8,7 +8,13 @@ FROM quay.io/gravitational/debian-venti:go${GOVERSION}-stretch
 ENV PATH $PATH:$GOPATH/bin:$GOROOT/bin
 ENV GOCACHE ${GOPATH}/.gocache-${GOVERSION}
 
-RUN apt-get update && apt-get install -y libc6-dev libudev-dev
+RUN apt-get update && \
+    apt-get install -y \
+    libc6-dev \
+    libudev-dev \
+    libpcre2-dev \
+    libssl-dev \
+    libsystemd-dev
 
 RUN mkdir -p $GOPATH/src $GOPATH/bin ${GOCACHE};go get github.com/tools/godep
 RUN go get github.com/gravitational/version/cmd/linkflags

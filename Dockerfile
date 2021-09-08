@@ -15,6 +15,7 @@ ARG PLANET_UID=980665
 ARG PLANET_GID=980665
 ARG GO_VERSION=1.16.3
 ARG ALPINE_VERSION=3.12
+ARG HAPROXY_URL=https://www.haproxy.org/download/2.4/src/haproxy-2.4.2.tar.gz
 ARG DEBIAN_IMAGE=quay.io/gravitational/debian-mirror@sha256:4b6ec644c29e4964a6f74543a5bf8c12bed6dec3d479e039936e4a37a8af9116
 ARG GO_BUILDER_VERSION=go1.13.8-stretch
 # TODO(dima): update to 2.7.2 release once available
@@ -62,6 +63,43 @@ RUN set -ex && \
         ./configure --disable-nftables --prefix=/usr/local && \
         make && \
         make install
+
+FROM ${DEBIAN_IMAGE} AS haproxy-builder
+ARG HAPROXY_URL
+
+RUN set -eux; \
+	apt-get update && apt-get install -y --no-install-recommends \
+		ca-certificates \
+		gcc \
+		libc6-dev \
+		libpcre2-dev \
+		libssl-dev \
+		libsystemd-dev \
+		make \
+		wget \
+	; \
+	wget -O haproxy.tar.gz "$HAPROXY_URL"; \
+	mkdir -p /usr/src/haproxy; \
+	tar -xzf haproxy.tar.gz -C /usr/src/haproxy --strip-components=1; \
+	rm haproxy.tar.gz; \
+	makeOpts=' \
+		TARGET=linux-glibc \
+		USE_SYSTEMD=1 \
+		USE_GETADDRINFO=1 \
+		USE_OPENSSL=1 \
+		USE_PCRE2=1 USE_PCRE2_JIT=1 \
+		USE_PROMEX=1 \
+		EXTRA_OBJS="" \
+	'; \
+	nproc="$(nproc)"; \
+	eval "make -C /usr/src/haproxy -j '$nproc' all $makeOpts"; \
+	eval "make -C /usr/src/haproxy install-bin $makeOpts"; \
+	\
+	mkdir -p /usr/local/etc/haproxy; \
+	cp -R /usr/src/haproxy/examples/errorfiles /usr/local/etc/haproxy/errors; \
+	\
+# smoke test
+	haproxy -v
 
 # Builder box
 # FIXME(dima): for Go1.16 use:
@@ -178,6 +216,7 @@ RUN --mount=type=cache,target=/var/cache/apt,rw --mount=type=cache,target=/var/l
 	kmod \
 	libip4tc0=1.6.0+snapshot20161117-6 \
 	ebtables \
+	libpcre2-dev \
 	libsqlite3-0 \
 	e2fsprogs \
 	libncurses5 \
@@ -340,6 +379,12 @@ COPY ./build.assets/makefiles/base/network/flanneld.service /lib/systemd/system/
 # Setup cni and include flannel as a plugin
 RUN set -ex && mkdir -p /etc/cni/net.d/ /opt/cni/bin
 COPY --from=cni-downloader /opt/cni/bin/ /opt/cni/bin/
+
+# haproxy.mk
+RUN set -ex && mkdir -p /usr/local/etc/haproxy /usr/local/sbin/ /etc/haproxy/certs
+COPY --from=haproxy-builder /usr/local/sbin/haproxy /usr/local/sbin/haproxy
+COPY --from=haproxy-builder /usr/local/etc/haproxy /usr/local/etc/haproxy
+COPY ./build.assets/makefiles/base/haproxy/haproxy.service /lib/systemd/system/
 
 # scripts to wait for etcd/flannel to come up
 RUN --mount=target=/host \

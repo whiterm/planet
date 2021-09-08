@@ -18,6 +18,7 @@ RUN export DEBIAN_FRONTEND=noninteractive && set -ex && \
         libip4tc0=1.6.0+snapshot20161117-6 \
         ebtables \
         libsqlite3-0 \
+        libpcre2-dev \
         e2fsprogs \
         libncurses5 \
         net-tools \

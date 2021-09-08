@@ -12,6 +12,7 @@ CNI_VER := 0.8.6
 IPTABLES_VER := v1.8.5
 BUILDBOX_GO_VER ?= 1.13.8
 DISTRIBUTION_VER=v2.7.1-gravitational
+HAPROXY_VERSION ?= 2.4.2
 
 # planet user to use inside the rootfs tarball. This serves as a placeholder
 # and the files will be owned by the actual planet user after extraction

@@ -36,6 +36,7 @@ import (
 	"github.com/gravitational/planet/lib/check"
 	"github.com/gravitational/planet/lib/constants"
 	"github.com/gravitational/planet/lib/defaults"
+	"github.com/gravitational/planet/lib/kubeconfig"
 	"github.com/gravitational/planet/lib/user"
 	"github.com/gravitational/planet/lib/utils"
 
@@ -149,7 +150,8 @@ func start(config *Config) (*runtimeContext, error) {
 		// Default agent name to the name of the etcd member
 		box.EnvPair{Name: EnvAgentName, Val: config.EtcdMemberName},
 		box.EnvPair{Name: EnvInitialCluster, Val: toKeyValueList(config.InitialCluster)},
-		box.EnvPair{Name: EnvAPIServerName, Val: constants.APIServerDNSName},
+		box.EnvPair{Name: EnvRegistryAddress, Val: constants.RegistryDNSName},
+		box.EnvPair{Name: EnvAPIServerName, Val: config.APIServerAddr()},
 		box.EnvPair{Name: EnvAPIServerPort, Val: constants.APIServerPort},
 		box.EnvPair{Name: EnvEtcdProxy, Val: config.EtcdProxy},
 		box.EnvPair{Name: EnvEtcdMemberName, Val: config.EtcdMemberName},
@@ -166,6 +168,8 @@ func start(config *Config) (*runtimeContext, error) {
 		box.EnvPair{Name: EnvServiceUID, Val: config.ServiceUser.UID},
 		box.EnvPair{Name: EnvServiceGID, Val: config.ServiceUser.GID},
 		box.EnvPair{Name: EnvHighAvailability, Val: strconv.FormatBool(config.HighAvailability)},
+		box.EnvPair{Name: EnvLoadBalancerType, Val: config.LoadbalancerType},
+		box.EnvPair{Name: EnvLoadBalancerExtAddress, Val: config.LoadbalancerExtAddress},
 	)
 
 	// Setup http_proxy / no_proxy environment configuration
@@ -235,15 +239,13 @@ func start(config *Config) (*runtimeContext, error) {
 		return nil, trace.Wrap(err)
 	}
 
-	if err = addKubeConfig(config); err != nil {
+	if err = addKubeConfigFiles(config); err != nil {
+		return nil, trace.Wrap(err)
+	}
+	if err = addKubectlKubeConfig(config); err != nil {
 		return nil, trace.Wrap(err)
 	}
 
-	if !config.SELinux {
-		if err = setKubeConfigOwnership(config); err != nil {
-			return nil, trace.Wrap(err)
-		}
-	}
 	mountSecrets(config)
 
 	err = setHosts(config, generateHosts())
@@ -550,6 +552,53 @@ func addComponentOptions(config *Config) error {
 	return nil
 }
 
+func genKubeconfigOtions(component string, apiServerURL string) kubeconfig.Options {
+	return kubeconfig.Options{
+		Filepath:             fmt.Sprintf("/etc/kubernetes/%s.kubeconfig", component),
+		Username:             component,
+		Server:               apiServerURL,
+		CertificateAuthority: "/var/state/root.cert",
+		ClientCertificate:    fmt.Sprintf("/var/state/%s.cert", component),
+		ClientKey:            fmt.Sprintf("/var/state/%s.key", component),
+	}
+}
+
+func genKubeconfigFiles(opts []kubeconfig.Options, owners *box.FileOwner) ([]box.File, error) {
+	files := make([]box.File, 0, len(opts))
+	for _, opt := range opts {
+		file, err := kubeconfig.GenerateSimpleConfig(opt).BuildFile(owners)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+		files = append(files, *file)
+	}
+	return files, nil
+}
+
+// addKubeConfigFiles adds the kubeconfig files for kubernetes components
+func addKubeConfigFiles(config *Config) error {
+	var owners *box.FileOwner
+	if !config.SELinux {
+		owners = &box.FileOwner{
+			UID: RootUID,
+			GID: RootGID,
+		}
+	}
+	apiServerURL := config.APIServerURL()
+	opts := []kubeconfig.Options{
+		genKubeconfigOtions("kubelet", apiServerURL),
+		genKubeconfigOtions("coredns", apiServerURL),
+		genKubeconfigOtions("proxy", apiServerURL),
+		genKubeconfigOtions("scheduler", apiServerURL),
+	}
+	files, err := genKubeconfigFiles(opts, owners)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	config.Files = append(config.Files, files...)
+	return nil
+}
+
 // addKubeletOptions sets extra kubelet command line arguments in environment
 func addKubeletOptions(config *Config) error {
 	if config.KubeletOptions != "" {
@@ -602,8 +651,8 @@ func applyConfigOverrides(config *kubeletconfig.KubeletConfiguration) error {
 	return nil
 }
 
-// addKubeConfig writes a kubectl config file
-func addKubeConfig(config *Config) error {
+// addKubectlKubeConfig writes a kubectl config file
+func addKubectlKubeConfig(config *Config) error {
 	// Generate two kubectl configuration files: one will be used by
 	// kubectl when invoked from host, another one - from planet,
 	// because state directory may be different.
@@ -611,8 +660,15 @@ func addKubeConfig(config *Config) error {
 		constants.KubectlConfigPath:     constants.GravityDataDir,
 		constants.KubectlHostConfigPath: config.HostStateDir(),
 	}
+	server := config.APIServerURL()
 	for configPath, stateDir := range kubeConfigs {
-		kubeConfig, err := NewKubeConfig(config.APIServerIP(), stateDir)
+		content, err := kubeconfig.GenerateSimpleConfig(kubeconfig.Options{
+			Username:             "kubectl",
+			Server:               server,
+			CertificateAuthority: fmt.Sprintf("%s/secrets/root.cert", stateDir),
+			ClientKey:            fmt.Sprintf("%s/secrets/kubectl.key", stateDir),
+			ClientCertificate:    fmt.Sprintf("%s/secrets/kubectl.cert", stateDir),
+		}).Bytes()
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -623,24 +679,12 @@ func addKubeConfig(config *Config) error {
 		}
 		// set read-only permissions for kubectl.kubeconfig to avoid annoying warning from Helm 3
 		// 'WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /etc/kubernetes/kubectl.kubeconfig'
-		err = utils.SafeWriteFile(path, kubeConfig, constants.OwnerReadMask)
+		err = utils.SafeWriteFile(path, content, constants.OwnerReadMask)
 		if err != nil {
 			return trace.Wrap(err)
 		}
 	}
 	return nil
-}
-
-// setKubeConfigOwnership adjusts ownership of k8s config files to root:root
-func setKubeConfigOwnership(config *Config) error {
-	var errors []error
-	for _, c := range []string{constants.SchedulerConfigPath, constants.ProxyConfigPath, constants.KubeletConfigPath} {
-		err := os.Chown(filepath.Join(config.Rootfs, c), RootUID, RootGID)
-		if err != nil {
-			errors = append(errors, trace.ConvertSystemError(err))
-		}
-	}
-	return trace.NewAggregate(errors...)
 }
 
 // setCoreDNS generates CoreDNS configuration for this server
@@ -649,8 +693,8 @@ func setCoreDNS(config *Config) error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-
 	corednsConfig, err := generateCoreDNSConfig(coreDNSConfig{
+		KubeAPIAddress:      config.APIServerURL(),
 		Zones:               config.DNS.Zones,
 		Hosts:               config.DNS.Hosts,
 		ListenAddrs:         config.DNS.ListenAddrs,
@@ -686,6 +730,7 @@ func generateCoreDNSConfig(config coreDNSConfig, tpl string) (string, error) {
 }
 
 type coreDNSConfig struct {
+	KubeAPIAddress      string
 	Zones               map[string][]string
 	Hosts               map[string][]string
 	ListenAddrs         []string
@@ -706,7 +751,7 @@ var coreDNSTemplate = `
     fallthrough
   }
   kubernetes cluster.local in-addr.arpa ip6.arpa {
-    endpoint https://leader.telekube.local:6443
+    endpoint {{ .KubeAPIAddress }}
     tls /var/state/coredns.cert /var/state/coredns.key /var/state/root.cert
     pods verified
     fallthrough in-addr.arpa ip6.arpa
